@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@mlc-ai/web-llm"></script>
 </head>
 <body class="bg-gray-950 text-white min-h-screen flex flex-col">
   <header id="chatHeader" class="p-4 bg-gray-900 shadow text-lg font-bold">
@@ -21,6 +22,29 @@
   <script type="module">
     let persona = null;
     let messagesHistory = [];
+    let chatEngine = null;
+
+    // Format AI text with Markdown + <think> italics
+    function formatText(text) {
+      let md = text
+        .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>") // bold
+        .replace(/\*(.*?)\*/g, "<i>$1</i>")     // italic
+        .replace(/`(.*?)`/g, "<code>$1</code>");// inline code
+      md = md.replace(/<think>(.*?)<\/think>/g, "<i>$1</i>");
+      return md;
+    }
+
+    // Add messages to chat
+    function appendMessage(sender, text) {
+      const chatBox = document.getElementById("chatBox");
+      const msg = document.createElement("div");
+      msg.className = sender === "user"
+        ? "bg-blue-600 p-3 rounded-lg self-end max-w-lg ml-auto"
+        : "bg-gray-800 p-3 rounded-lg self-start max-w-lg";
+      msg.innerHTML = formatText(text);
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
     // Load persona
     async function loadPersona() {
@@ -43,21 +67,26 @@
       appendMessage("ai", `You are now chatting with **${persona.name}**`);
     }
 
-    // Add messages to chat
-    function appendMessage(sender, text) {
-      const chatBox = document.getElementById("chatBox");
-      const msg = document.createElement("div");
-      msg.className = sender === "user"
-        ? "bg-blue-600 p-3 rounded-lg self-end max-w-lg ml-auto"
-        : "bg-gray-800 p-3 rounded-lg self-start max-w-lg";
-      msg.innerHTML = text.replace(/<think>(.*?)<\/think>/g, "<i>$1</i>");
-      chatBox.appendChild(msg);
-      chatBox.scrollTop = chatBox.scrollHeight;
+    // Initialize WebLLM
+    async function initModel() {
+      appendMessage("ai", "⏳ Loading AI model...");
+      chatEngine = new window.webllm.ChatModule();
+      await chatEngine.reload("Llama-3.2-1B-Instruct-q4f16_1-MLC"); // you can swap models
+      appendMessage("ai", "✅ Model ready! Start chatting.");
     }
 
-    // Fake AI response (replace with your model later)
+    // Get AI reply
     async function aiReply(userMsg) {
-      return `*Thinking...* <think>I see you said: ${userMsg}</think>`;
+      messagesHistory.push({ role: "user", content: userMsg });
+      const reply = await chatEngine.chat.completions.create({
+        messages: messagesHistory,
+        temperature: 0.7,
+        max_tokens: 256,
+      });
+
+      const text = reply.choices[0].message.content;
+      messagesHistory.push({ role: "assistant", content: text });
+      return text;
     }
 
     // Form submission
@@ -74,7 +103,9 @@
       appendMessage("ai", response);
     });
 
-    loadPersona();
+    // Boot up
+    await loadPersona();
+    await initModel();
   </script>
 </body>
 </html>
