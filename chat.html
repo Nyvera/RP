@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen flex flex-col">
+  <header id="chatHeader" class="p-4 bg-gray-900 shadow text-lg font-bold">
+    Chat
+  </header>
+
+  <main id="chatBox" class="flex-grow overflow-y-auto p-6 space-y-4"></main>
+
+  <form id="chatForm" class="p-4 bg-gray-900 flex gap-2">
+    <input id="userInput" type="text" placeholder="Type your message..."
+      class="flex-grow p-2 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none">
+    <button class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium">Send</button>
+  </form>
+
+  <script type="module">
+    let persona = null;
+    let messagesHistory = [];
+
+    // Load persona
+    async function loadPersona() {
+      const params = new URLSearchParams(window.location.search);
+      const personaId = params.get("persona");
+
+      const res = await fetch("personas.json");
+      const personas = await res.json();
+      persona = personas.find(p => p.id === personaId);
+
+      if (!persona) {
+        alert("Persona not found");
+        return;
+      }
+
+      document.title = persona.name + " - Chat";
+      document.getElementById("chatHeader").textContent = "Chat with " + persona.name;
+
+      messagesHistory.push({ role: "system", content: persona.system });
+      appendMessage("ai", `You are now chatting with **${persona.name}**`);
+    }
+
+    // Add messages to chat
+    function appendMessage(sender, text) {
+      const chatBox = document.getElementById("chatBox");
+      const msg = document.createElement("div");
+      msg.className = sender === "user"
+        ? "bg-blue-600 p-3 rounded-lg self-end max-w-lg ml-auto"
+        : "bg-gray-800 p-3 rounded-lg self-start max-w-lg";
+      msg.innerHTML = text.replace(/<think>(.*?)<\/think>/g, "<i>$1</i>");
+      chatBox.appendChild(msg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Fake AI response (replace with your model later)
+    async function aiReply(userMsg) {
+      return `*Thinking...* <think>I see you said: ${userMsg}</think>`;
+    }
+
+    // Form submission
+    document.getElementById("chatForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const input = document.getElementById("userInput");
+      const userMsg = input.value.trim();
+      if (!userMsg) return;
+
+      appendMessage("user", userMsg);
+      input.value = "";
+
+      const response = await aiReply(userMsg);
+      appendMessage("ai", response);
+    });
+
+    loadPersona();
+  </script>
+</body>
+</html>
