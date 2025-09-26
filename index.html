@@ -4,13 +4,23 @@
   <meta charset="utf-8">
   <title>AI Characters</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .persona-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 15px 30px rgba(0,0,0,0.5); }
+    .tag { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 6px; font-size: 0.7rem; margin: 1px; display: inline-block; }
+  </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen flex flex-col">
   <header class="p-6 text-center text-3xl font-bold bg-gray-900 shadow">
     Choose Your AI Character
   </header>
-<p>Note: If the website says persona not found hit CTRL+SHIFT+R</p>
+  <p class="text-center text-gray-400 mt-2 mb-4 text-sm">Note: If the website says persona not found, hit CTRL+SHIFT+R</p>
+
   <main class="flex-grow p-6">
+    <div class="flex justify-end mb-4 gap-2">
+      <label class="flex items-center gap-1 text-gray-400 text-sm">
+        <input type="checkbox" id="nsfwToggle" checked /> Show NSFW
+      </label>
+    </div>
     <div id="characters" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"></div>
   </main>
 
@@ -19,20 +29,33 @@
   </footer>
 
   <script>
+    let personasData = [];
     async function loadCharacters() {
       const res = await fetch("personas.json");
       const personas = await res.json();
-      const container = document.getElementById("characters");
+      personasData = personas;
+      renderCards();
+    }
 
-      personas.forEach(p => {
+    function renderCards() {
+      const container = document.getElementById("characters");
+      container.innerHTML = "";
+      const showNSFW = document.getElementById("nsfwToggle").checked;
+
+      personasData.forEach(p => {
+        if (!showNSFW && p.tags.includes("nsfw-ok")) return;
+
         const card = document.createElement("div");
-        card.className = "bg-gray-800 p-6 rounded-2xl shadow hover:shadow-xl transition flex flex-col items-center text-center";
+        card.className = "persona-card bg-gray-800 p-6 rounded-2xl shadow transition flex flex-col items-center text-center";
         card.innerHTML = `
           <img src="${p.avatar}" alt="${p.name}" class="w-24 h-24 rounded-full mb-4 border-2 border-gray-700">
           <h2 class="text-xl font-semibold mb-2">${p.name}</h2>
-          <p class="text-gray-400 text-sm mb-4">${p.description}</p>
+          <p class="text-gray-400 text-sm mb-2">${p.description}</p>
+          <div class="flex flex-wrap justify-center mb-4">
+            ${p.tags.map(tag => `<span class="tag">${tag}</span>`).join("")}
+          </div>
           <button onclick="startChat('${p.id}')" 
-            class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium">
+            class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium transition transform hover:scale-105">
             Chat
           </button>
         `;
@@ -43,6 +66,8 @@
     function startChat(id) {
       window.location.href = `chat.html?persona=${id}`;
     }
+
+    document.getElementById("nsfwToggle").addEventListener("change", renderCards);
 
     loadCharacters();
   </script>
