@@ -5,6 +5,23 @@
   <title>Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@mlc-ai/web-llm"></script>
+  <style>
+    .typing-indicator span {
+      display:inline-block;
+      width:8px;
+      height:8px;
+      margin:0 2px;
+      background:white;
+      border-radius:50%;
+      animation: blink 1.4s infinite both;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay:0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay:0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity:0; }
+      40% { opacity:1; }
+    }
+  </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen flex flex-col">
   <header id="chatHeader" class="p-4 bg-gray-900 shadow text-lg font-bold">Chat</header>
@@ -29,17 +46,13 @@
     const chatForm = document.getElementById("chatForm");
     const userInput = document.getElementById("userInput");
 
-    // Format text: Markdown-like + <think>
+    // Format text: Markdown + <think>
     function formatText(text) {
-      // Replace <think>…</think> with italics
       const withThink = text.replace(/<think>(.*?)<\/think>/gs, "<i>$1</i>");
-      // Basic markdown: **bold**, *italic*, `code`
       let md = withThink
         .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-        .replace(/`(.*?)`/g, "<code>$1</code>");
-      // handle *italic* last to avoid conflicts with bold
-      md = md.replace(/\*(.*?)\*/g, "<i>$1</i>");
-      // Convert line breaks to <br> for multi-paragraph RP
+        .replace(/`(.*?)`/g, "<code>$1</code>")
+        .replace(/\*(.*?)\*/g, "<i>$1</i>");
       md = md.replace(/\n/g, "<br>");
       return md;
     }
@@ -54,15 +67,25 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
+    // Typing indicator
+    function showTypingIndicator() {
+      const div = document.createElement("div");
+      div.className = "bg-gray-800 p-3 rounded-lg self-start max-w-lg typing-indicator";
+      div.innerHTML = '<span></span><span></span><span></span>';
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      return div;
+    }
+
+    function removeTypingIndicator(indicator) {
+      if (indicator) chatBox.removeChild(indicator);
+    }
+
     // Persistence: load & save
     function saveHistory() {
       if (!persona) return;
       const key = "chat_history_" + persona.id;
-      try {
-        localStorage.setItem(key, JSON.stringify(messagesHistory));
-      } catch (err) {
-        console.warn("Failed to save history:", err);
-      }
+      localStorage.setItem(key, JSON.stringify(messagesHistory));
     }
 
     function loadHistory() {
@@ -79,13 +102,11 @@
               else if (msg.role === "assistant") appendMessage("ai", msg.content);
             }
           }
-        } catch (err) {
-          console.warn("Invalid history JSON:", err);
-        }
+        } catch {}
       }
     }
 
-    // Load persona & system prompt
+    // Load persona from URL
     async function loadPersona() {
       const params = new URLSearchParams(window.location.search);
       const personaId = params.get("persona");
@@ -100,7 +121,8 @@
       chatHeader.textContent = "Chat with " + persona.name;
 
       loadHistory();
-      if (messagesHistory.length === 0) {
+
+      if (!messagesHistory.some(m => m.role === "system")) {
         messagesHistory.push({ role: "system", content: persona.system });
         appendMessage("ai", `You are now chatting with **${persona.name}**`);
       }
@@ -110,16 +132,16 @@
     async function initEngine() {
       appendMessage("ai", "⏳ Loading model...");
       engine = await CreateMLCEngine("Llama-3.2-1B-Instruct-q4f16_1-MLC", {
-        initProgressCallback: (p) => {
-          console.debug("Load progress:", p);
-        }
+        initProgressCallback: (p) => { console.debug("Load progress:", p); }
       });
       appendMessage("ai", "✅ Model loaded. You can start chatting!");
     }
 
-    // Streaming RP reply
+    // Streaming AI reply
     async function aiReplyStream(userMsg) {
       messagesHistory.push({ role: "user", content: userMsg });
+
+      const indicator = showTypingIndicator();
 
       const stream = await engine.chat.completions.create({
         messages: messagesHistory,
@@ -144,11 +166,12 @@
         chatBox.scrollTop = chatBox.scrollHeight;
       }
 
+      removeTypingIndicator(indicator);
+
       messagesHistory.push({ role: "assistant", content: cumulated });
       saveHistory();
     }
 
-    // On form submit
     chatForm.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const txt = userInput.value.trim();
@@ -158,7 +181,7 @@
       await aiReplyStream(txt);
     });
 
-    // Boot sequence
+    // Boot
     await loadPersona();
     await initEngine();
   </script>
