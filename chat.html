@@ -36,16 +36,19 @@
       // Basic markdown: **bold**, *italic*, `code`
       let md = withThink
         .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-        .replace(/\*(.*?)\*/g, "<i>$1</i>")
         .replace(/`(.*?)`/g, "<code>$1</code>");
+      // handle *italic* last to avoid conflicts with bold
+      md = md.replace(/\*(.*?)\*/g, "<i>$1</i>");
+      // Convert line breaks to <br> for multi-paragraph RP
+      md = md.replace(/\n/g, "<br>");
       return md;
     }
 
     function appendMessage(sender, text) {
       const msgDiv = document.createElement("div");
       msgDiv.className = sender === "user"
-        ? "bg-blue-600 p-3 rounded-lg self-end max-w-lg ml-auto"
-        : "bg-gray-800 p-3 rounded-lg self-start max-w-lg";
+        ? "bg-blue-600 p-3 rounded-lg self-end max-w-lg ml-auto whitespace-pre-wrap"
+        : "bg-gray-800 p-3 rounded-lg self-start max-w-lg whitespace-pre-wrap";
       msgDiv.innerHTML = formatText(text);
       chatBox.appendChild(msgDiv);
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -69,12 +72,9 @@
       if (json) {
         try {
           const arr = JSON.parse(json);
-          // validate minimal shape
           if (Array.isArray(arr)) {
             messagesHistory = arr;
-            // replay it into UI
             for (const msg of messagesHistory) {
-              // skip system messages in UI maybe
               if (msg.role === "user") appendMessage("user", msg.content);
               else if (msg.role === "assistant") appendMessage("ai", msg.content);
             }
@@ -99,8 +99,6 @@
       document.title = persona.name + " – Chat";
       chatHeader.textContent = "Chat with " + persona.name;
 
-      // Start messagesHistory with system prompt if first time
-      // But if history exists, it may already include system
       loadHistory();
       if (messagesHistory.length === 0) {
         messagesHistory.push({ role: "system", content: persona.system });
@@ -110,26 +108,24 @@
 
     // Initialize model
     async function initEngine() {
-      // show loading
       appendMessage("ai", "⏳ Loading model...");
       engine = await CreateMLCEngine("Llama-3.2-1B-Instruct-q4f16_1-MLC", {
         initProgressCallback: (p) => {
-          // optional: you could update a progress bar or message
           console.debug("Load progress:", p);
         }
       });
       appendMessage("ai", "✅ Model loaded. You can start chatting!");
     }
 
-    // Streaming reply
+    // Streaming RP reply
     async function aiReplyStream(userMsg) {
       messagesHistory.push({ role: "user", content: userMsg });
 
       const stream = await engine.chat.completions.create({
         messages: messagesHistory,
-        temperature: 0.7,
+        temperature: 0.8,
         stream: true,
-        max_tokens: 512
+        max_tokens: 1024
       });
 
       let assistantDiv = null;
@@ -140,9 +136,8 @@
         cumulated += delta;
 
         if (!assistantDiv) {
-          // first chunk — create the UI container
           assistantDiv = document.createElement("div");
-          assistantDiv.className = "bg-gray-800 p-3 rounded-lg self-start max-w-lg";
+          assistantDiv.className = "bg-gray-800 p-3 rounded-lg self-start max-w-lg whitespace-pre-wrap";
           chatBox.appendChild(assistantDiv);
         }
         assistantDiv.innerHTML = formatText(cumulated);
